@@ -1,0 +1,867 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+import javax.swing.border.*;
+import java.io.*;
+import javax.imageio.ImageIO;
+import java.net.URL;
+
+public class Main extends JFrame {
+
+    // КЛАСС ИГРОКА 
+    static class Player {
+        String name;
+        String playerClass;
+        int level = 1;
+        int exp = 0;
+        int expToNextLevel = 100;
+        int health = 100;
+        int maxHealth = 100;
+        int mana = 50;
+        int maxMana = 50;
+        int attack = 10;
+        int defense = 5;
+        int gold = 50;
+        int potions = 3;
+        ArrayList<String> inventory = new ArrayList<>();
+
+        public Player(String name, String playerClass) {
+            this.name = name;
+            this.playerClass = playerClass;
+            setClassStats();
+        }
+
+        private void setClassStats() {
+            switch(playerClass) {
+                case "Воин":
+                    maxHealth = 120;
+                    health = 120;
+                    attack = 15;
+                    defense = 10;
+                    break;
+                case "Маг":
+                    maxHealth = 80;
+                    health = 80;
+                    attack = 8;
+                    defense = 4;
+                    maxMana = 100;
+                    mana = 100;
+                    break;
+                case "Лучник":
+                    maxHealth = 100;
+                    health = 100;
+                    attack = 12;
+                    defense = 7;
+                    break;
+            }
+        }
+
+        public void addExp(int amount) {
+            exp += amount;
+            if (exp >= expToNextLevel) {
+                levelUp();
+            }
+        }
+
+        private void levelUp() {
+            level++;
+            exp = 0;
+            expToNextLevel = (int)(expToNextLevel * 1.5);
+
+            maxHealth += 20;
+            maxMana += 10;
+            attack += 3;
+            defense += 2;
+            health = maxHealth;
+            mana = maxMana;
+
+            potions += 2;
+        }
+
+        public void heal(int amount) {
+            health = Math.min(maxHealth, health + amount);
+        }
+
+        public void takeDamage(int damage) {
+            int actualDamage = Math.max(1, damage - defense / 2);
+            health -= actualDamage;
+        }
+
+        public boolean isAlive() {
+            return health > 0;
+        }
+    }
+
+    //КЛАСС ВРАГА
+    static class Enemy {
+        String name;
+        int health;
+        int maxHealth;
+        int attack;
+        int defense;
+        int expReward;
+        int goldReward;
+        String imagePath;
+
+        public Enemy(String name, int health, int attack, int defense, int expReward, int goldReward) {
+            this.name = name;
+            this.maxHealth = health;
+            this.health = health;
+            this.attack = attack;
+            this.defense = defense;
+            this.expReward = expReward;
+            this.goldReward = goldReward;
+        }
+
+        public void takeDamage(int damage) {
+            int actualDamage = Math.max(1, damage - defense / 4);
+            health -= actualDamage;
+        }
+
+        public boolean isAlive() {
+            return health > 0;
+        }
+    }
+
+    //  КОМПОНЕНТЫ GUI
+    private Player player;
+    private Random random = new Random();
+
+    // Основные панели
+    private JPanel mainPanel;
+    private CardLayout cardLayout;
+
+    // Компоненты главного меню
+    private JButton startButton, loadButton, exitButton;
+    private JTextField nameField;
+    private JComboBox<String> classComboBox;
+
+    // Компоненты игровой панели
+    private JLabel playerNameLabel, playerClassLabel, levelLabel;
+    private JProgressBar healthBar, manaBar, expBar;
+    private JLabel healthLabel, manaLabel, expLabel, goldLabel, potionLabel;
+    private JTextArea logArea;
+    private JButton forestButton, caveButton, dungeonButton;
+    private JButton shopButton, restButton, statsButton;
+
+    // Компоненты боевой панели
+    private JLabel enemyImageLabel, enemyNameLabel;
+    private JProgressBar enemyHealthBar;
+    private JButton attackButton, defendButton, potionButton, runButton;
+    private JTextArea battleLog;
+
+    // ============ КОНСТРУКТОР ============
+    public Main() {  // ИСПРАВЛЕНО: было addExp, теперь Main()
+        setTitle("Dragon's Legacy - Консольная RPG");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(900, 700);
+        setLocationRelativeTo(null);
+
+        // Настройка стилей
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // Настройка карточного менеджера
+        cardLayout = new CardLayout();
+        mainPanel = new JPanel(cardLayout);
+        mainPanel.add(createMainMenuPanel(), "menu");
+        mainPanel.add(createGamePanelContainer(), "game");
+        mainPanel.add(createBattlePanelContainer(), "battle");
+
+        add(mainPanel);
+
+        // Показываем меню
+        cardLayout.show(mainPanel, "menu");
+
+        setVisible(true);
+    }
+
+    // ============ СОЗДАНИЕ КОМПОНЕНТОВ ============
+
+    private JPanel createMainMenuPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(30, 30, 40));
+
+        // Заголовок
+        JLabel titleLabel = new JLabel("DRAGON'S LEGACY RPG", SwingConstants.CENTER);
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 48));
+        titleLabel.setForeground(new Color(255, 215, 0));
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(50, 0, 30, 0));
+
+        // Центральная панель с элементами
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        centerPanel.setOpaque(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+
+        // Поле для имени
+        JLabel namePrompt = new JLabel("Имя героя:");
+        namePrompt.setFont(new Font("Arial", Font.PLAIN, 20));
+        namePrompt.setForeground(Color.WHITE);
+
+        nameField = new JTextField(20);
+        nameField.setFont(new Font("Arial", Font.PLAIN, 20));
+        nameField.setPreferredSize(new Dimension(300, 40));
+
+        // Выбор класса
+        JLabel classPrompt = new JLabel("Класс:");
+        classPrompt.setFont(new Font("Arial", Font.PLAIN, 20));
+        classPrompt.setForeground(Color.WHITE);
+
+        classComboBox = new JComboBox<>(new String[]{"Воин", "Маг", "Лучник"});
+        classComboBox.setFont(new Font("Arial", Font.PLAIN, 20));
+        classComboBox.setPreferredSize(new Dimension(300, 40));
+
+        // Кнопки
+        startButton = createStyledButton("🎮 НАЧАТЬ ИГРУ");
+        loadButton = createStyledButton("💾 ЗАГРУЗИТЬ");
+        exitButton = createStyledButton("🚪 ВЫХОД");
+
+        // Добавление компонентов
+        gbc.gridx = 0; gbc.gridy = 0;
+        centerPanel.add(namePrompt, gbc);
+
+        gbc.gridx = 1;
+        centerPanel.add(nameField, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1;
+        centerPanel.add(classPrompt, gbc);
+
+        gbc.gridx = 1;
+        centerPanel.add(classComboBox, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        centerPanel.add(startButton, gbc);
+
+        gbc.gridy = 3;
+        centerPanel.add(loadButton, gbc);
+
+        gbc.gridy = 4;
+        centerPanel.add(exitButton, gbc);
+
+        // Обработчики событий
+        startButton.addActionListener(e -> startNewGame());
+        exitButton.addActionListener(e -> System.exit(0));
+
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(centerPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JPanel createGamePanelContainer() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(new Color(40, 40, 50));
+
+        // Верхняя панель с характеристиками
+        JPanel statsPanel = new JPanel(new GridLayout(1, 4, 10, 0));
+        statsPanel.setBackground(new Color(50, 50, 60));
+        statsPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        playerNameLabel = new JLabel("", SwingConstants.CENTER);
+        playerClassLabel = new JLabel("", SwingConstants.CENTER);
+        levelLabel = new JLabel("Уровень: 1", SwingConstants.CENTER);
+        goldLabel = new JLabel("💰: 50", SwingConstants.CENTER);
+
+        for (JLabel label : new JLabel[]{playerNameLabel, playerClassLabel, levelLabel, goldLabel}) {
+            label.setFont(new Font("Arial", Font.BOLD, 16));
+            label.setForeground(Color.WHITE);
+            statsPanel.add(label);
+        }
+
+        // Центральная панель с информацией
+        JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
+        centerPanel.setBackground(new Color(40, 40, 50));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // Левая панель - статус
+        JPanel statusPanel = new JPanel(new GridLayout(5, 1, 0, 10));
+        statusPanel.setBackground(new Color(50, 50, 60));
+        statusPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(new Color(255, 215, 0), 2),
+                "СТАТУС",
+                TitledBorder.CENTER,
+                TitledBorder.TOP,
+                new Font("Arial", Font.BOLD, 16),
+                new Color(255, 215, 0)
+        ));
+
+        // Прогресс-бары
+        healthBar = new JProgressBar(0, 100);
+        healthBar.setValue(100);
+        healthBar.setStringPainted(true);
+        healthBar.setForeground(new Color(220, 50, 50));
+        healthBar.setBackground(new Color(80, 80, 80));
+        healthBar.setString("❤ Здоровье: 100/100");
+
+        manaBar = new JProgressBar(0, 100);
+        manaBar.setValue(100);
+        manaBar.setStringPainted(true);
+        manaBar.setForeground(new Color(50, 150, 255));
+        manaBar.setBackground(new Color(80, 80, 80));
+        manaBar.setString("✨ Мана: 50/50");
+
+        expBar = new JProgressBar(0, 100);
+        expBar.setValue(0);
+        expBar.setStringPainted(true);
+        expBar.setForeground(new Color(255, 215, 0));
+        expBar.setBackground(new Color(80, 80, 80));
+        expBar.setString("📊 Опыт: 0/100");
+
+        potionLabel = new JLabel("🧪 Зелья: 3", SwingConstants.CENTER);
+        potionLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        potionLabel.setForeground(Color.WHITE);
+
+        statusPanel.add(healthBar);
+        statusPanel.add(manaBar);
+        statusPanel.add(expBar);
+        statusPanel.add(potionLabel);
+
+        // Кнопки действий
+        JPanel actionPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        actionPanel.setBackground(new Color(50, 50, 60));
+        actionPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        forestButton = createActionButton("🌲 Тёмный лес");
+        caveButton = createActionButton("🏔️ Пещера");
+        dungeonButton = createActionButton("🐉 Подземелье");
+        shopButton = createActionButton("🏪 Магазин");
+        restButton = createActionButton("💤 Отдых");
+        statsButton = createActionButton("📊 Статистика");
+
+        actionPanel.add(forestButton);
+        actionPanel.add(caveButton);
+        actionPanel.add(dungeonButton);
+        actionPanel.add(shopButton);
+        actionPanel.add(restButton);
+        actionPanel.add(statsButton);
+
+        // Панель лога
+        logArea = new JTextArea(10, 30);
+        logArea.setEditable(false);
+        logArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        logArea.setBackground(new Color(30, 30, 30));
+        logArea.setForeground(Color.WHITE);
+        logArea.setBorder(BorderFactory.createLineBorder(new Color(100, 100, 100)));
+
+        JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll.setBorder(BorderFactory.createTitledBorder("ЖУРНАЛ СОБЫТИЙ"));
+
+        centerPanel.add(statusPanel, BorderLayout.WEST);
+        centerPanel.add(actionPanel, BorderLayout.CENTER);
+        centerPanel.add(logScroll, BorderLayout.SOUTH);
+
+        // Обработчики событий
+        forestButton.addActionListener(e -> exploreLocation("Тёмный лес"));
+        caveButton.addActionListener(e -> exploreLocation("Пещера"));
+        dungeonButton.addActionListener(e -> exploreLocation("Подземелье"));
+        shopButton.addActionListener(e -> visitShop());
+        restButton.addActionListener(e -> restAtInn());
+        statsButton.addActionListener(e -> showStats());
+
+        panel.add(statsPanel, BorderLayout.NORTH);
+        panel.add(centerPanel, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private JPanel createBattlePanelContainer() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBackground(new Color(30, 30, 40));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // Панель врага
+        JPanel enemyPanel = new JPanel(new BorderLayout(10, 10));
+        enemyPanel.setBackground(new Color(40, 40, 50));
+        enemyPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Color.RED, 2),
+                "ВРАГ",
+                TitledBorder.CENTER,
+                TitledBorder.TOP,
+                new Font("Arial", Font.BOLD, 18),
+                Color.RED
+        ));
+
+        enemyImageLabel = new JLabel("👹", SwingConstants.CENTER);
+        enemyImageLabel.setFont(new Font("Arial", Font.PLAIN, 72));
+
+        enemyNameLabel = new JLabel("", SwingConstants.CENTER);
+        enemyNameLabel.setFont(new Font("Arial", Font.BOLD, 24));
+        enemyNameLabel.setForeground(Color.WHITE);
+
+        enemyHealthBar = new JProgressBar(0, 100);
+        enemyHealthBar.setValue(100);
+        enemyHealthBar.setStringPainted(true);
+        enemyHealthBar.setForeground(Color.RED);
+        enemyHealthBar.setBackground(new Color(80, 80, 80));
+
+        enemyPanel.add(enemyImageLabel, BorderLayout.CENTER);
+        enemyPanel.add(enemyNameLabel, BorderLayout.NORTH);
+        enemyPanel.add(enemyHealthBar, BorderLayout.SOUTH);
+
+        // Панель игрока
+        JPanel playerPanel = new JPanel(new BorderLayout(10, 10));
+        playerPanel.setBackground(new Color(40, 40, 50));
+        playerPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(Color.GREEN, 2),
+                "ГЕРОЙ",
+                TitledBorder.CENTER,
+                TitledBorder.TOP,
+                new Font("Arial", Font.BOLD, 18),
+                Color.GREEN
+        ));
+
+        JLabel playerImageLabel = new JLabel("🤴", SwingConstants.CENTER);
+        playerImageLabel.setFont(new Font("Arial", Font.PLAIN, 72));
+
+        JLabel playerBattleLabel = new JLabel("", SwingConstants.CENTER);
+        playerBattleLabel.setFont(new Font("Arial", Font.BOLD, 24));
+        playerBattleLabel.setForeground(Color.WHITE);
+
+        JProgressBar playerHealthBar = new JProgressBar(0, 100);
+        playerHealthBar.setValue(100);
+        playerHealthBar.setStringPainted(true);
+        playerHealthBar.setForeground(new Color(50, 200, 50));
+        playerHealthBar.setBackground(new Color(80, 80, 80));
+
+        playerPanel.add(playerImageLabel, BorderLayout.CENTER);
+        playerPanel.add(playerBattleLabel, BorderLayout.NORTH);
+        playerPanel.add(playerHealthBar, BorderLayout.SOUTH);
+
+        // Панель действий
+        JPanel battleActionPanel = new JPanel(new GridLayout(2, 2, 10, 10));
+        battleActionPanel.setBackground(new Color(40, 40, 50));
+
+        attackButton = createBattleButton("⚔ АТАКА");
+        defendButton = createBattleButton("🛡 ЗАЩИТА");
+        potionButton = createBattleButton("🧪 ЗЕЛЬЕ");
+        runButton = createBattleButton("🏃‍♂️ БЕГСТВО");
+
+        battleActionPanel.add(attackButton);
+        battleActionPanel.add(defendButton);
+        battleActionPanel.add(potionButton);
+        battleActionPanel.add(runButton);
+
+        // Лог битвы
+        battleLog = new JTextArea(8, 40);
+        battleLog.setEditable(false);
+        battleLog.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        battleLog.setBackground(new Color(20, 20, 20));
+        battleLog.setForeground(Color.WHITE);
+        battleLog.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+
+        JScrollPane battleLogScroll = new JScrollPane(battleLog);
+        battleLogScroll.setBorder(BorderFactory.createTitledBorder("ХОД БОЯ"));
+
+        // Сборка панели
+        JPanel combatPanel = new JPanel(new GridLayout(1, 2, 20, 0));
+        combatPanel.setOpaque(false);
+        combatPanel.add(enemyPanel);
+        combatPanel.add(playerPanel);
+
+        panel.add(combatPanel, BorderLayout.CENTER);
+
+        JPanel southPanel = new JPanel(new BorderLayout(10, 10));
+        southPanel.setOpaque(false);
+        southPanel.add(battleActionPanel, BorderLayout.NORTH);
+        southPanel.add(battleLogScroll, BorderLayout.CENTER);
+
+        panel.add(southPanel, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ 
+
+    private JButton createStyledButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Arial", Font.BOLD, 20));
+        button.setBackground(new Color(70, 130, 180));
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(100, 149, 237), 3),
+                BorderFactory.createEmptyBorder(15, 30, 15, 30)
+        ));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        button.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(new Color(100, 149, 237));
+            }
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(new Color(70, 130, 180));
+            }
+        });
+
+        return button;
+    }
+
+    private JButton createActionButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Arial", Font.BOLD, 18));
+        button.setBackground(new Color(60, 100, 160));
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        button.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(new Color(80, 120, 200));
+            }
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(new Color(60, 100, 160));
+            }
+        });
+
+        return button;
+    }
+
+    private JButton createBattleButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(new Font("Arial", Font.BOLD, 20));
+        button.setBackground(new Color(200, 50, 50));
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        button.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(new Color(220, 70, 70));
+            }
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(new Color(200, 50, 50));
+            }
+        });
+
+        return button;
+    }
+
+    private void log(String message) {
+        logArea.append("> " + message + "\n");
+        logArea.setCaretPosition(logArea.getDocument().getLength());
+    }
+
+    private void battleLog(String message) {
+        battleLog.append("> " + message + "\n");
+        battleLog.setCaretPosition(battleLog.getDocument().getLength());
+    }
+
+    // ============ ЛОГИКА ИГРЫ ============
+
+    private void startNewGame() {
+        String name = nameField.getText().trim();
+        if (name.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Введите имя героя!", "Ошибка", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String playerClass = (String) classComboBox.getSelectedItem();
+        player = new Player(name, playerClass);
+
+        // Обновляем интерфейс
+        playerNameLabel.setText("Имя: " + player.name);
+        playerClassLabel.setText("Класс: " + player.playerClass);
+        updateStatsDisplay();
+
+        // Переходим к игре
+        cardLayout.show(mainPanel, "game");
+        log("Добро пожаловать, " + player.name + "!");
+        log("Вы - " + player.playerClass + ", готовый к приключениям!");
+    }
+
+    private void updateStatsDisplay() {
+        levelLabel.setText("Уровень: " + player.level);
+        goldLabel.setText("💰: " + player.gold);
+        healthBar.setMaximum(player.maxHealth);
+        healthBar.setValue(player.health);
+        healthBar.setString("❤ Здоровье: " + player.health + "/" + player.maxHealth);
+        manaBar.setMaximum(player.maxMana);
+        manaBar.setValue(player.mana);
+        manaBar.setString("✨ Мана: " + player.mana + "/" + player.maxMana);
+        expBar.setMaximum(player.expToNextLevel);
+        expBar.setValue(player.exp);
+        expBar.setString("📊 Опыт: " + player.exp + "/" + player.expToNextLevel);
+        potionLabel.setText("🧪 Зелья: " + player.potions);
+    }
+
+    private void exploreLocation(String locationName) {
+        log("Вы отправились в " + locationName + "...");
+
+        // Создаем врага в зависимости от локации
+        Enemy enemy = null;
+        switch(locationName) {
+            case "Тёмный лес":
+                enemy = new Enemy("Гоблин", 40, 8, 3, 25, 10);
+                enemyImageLabel.setText("👹");
+                break;
+            case "Пещера":
+                enemy = new Enemy("Орк", 60, 12, 5, 40, 20);
+                enemyImageLabel.setText("👺");
+                break;
+            case "Подземелье":
+                enemy = new Enemy("Дракон", 150, 25, 15, 100, 75);
+                enemyImageLabel.setText("🐉");
+                break;
+        }
+
+        if (enemy != null) {
+            enemyNameLabel.setText(enemy.name);
+            enemyHealthBar.setMaximum(enemy.maxHealth);
+            enemyHealthBar.setValue(enemy.health);
+            enemyHealthBar.setString(enemy.health + "/" + enemy.maxHealth);
+
+            // Переходим к битве
+            cardLayout.show(mainPanel, "battle");
+            startBattle(enemy);
+        }
+    }
+
+    private void startBattle(Enemy enemy) {
+        battleLog.setText("");
+        battleLog("Начало боя с " + enemy.name + "!");
+
+        // Сбрасываем обработчики
+        for (ActionListener al : attackButton.getActionListeners()) {
+            attackButton.removeActionListener(al);
+        }
+        for (ActionListener al : defendButton.getActionListeners()) {
+            defendButton.removeActionListener(al);
+        }
+        for (ActionListener al : potionButton.getActionListeners()) {
+            potionButton.removeActionListener(al);
+        }
+        for (ActionListener al : runButton.getActionListeners()) {
+            runButton.removeActionListener(al);
+        }
+
+        // Новые обработчики
+        attackButton.addActionListener(e -> performAttack(enemy));
+        defendButton.addActionListener(e -> performDefend(enemy));
+        potionButton.addActionListener(e -> usePotion(enemy));
+        runButton.addActionListener(e -> attemptRun(enemy));
+    }
+
+    private void performAttack(Enemy enemy) {
+        if (!player.isAlive() || !enemy.isAlive()) return;
+
+        int damage = player.attack + random.nextInt(6);
+        if (random.nextInt(100) < 20) {
+            damage *= 2;
+            battleLog("🔥 КРИТИЧЕСКИЙ УДАР!");
+        }
+
+        enemy.takeDamage(damage);
+        battleLog("Вы нанесли " + damage + " урона " + enemy.name + "!");
+
+        enemyHealthBar.setValue(enemy.health);
+        enemyHealthBar.setString(enemy.health + "/" + enemy.maxHealth);
+
+        if (!enemy.isAlive()) {
+            endBattleVictory(enemy);
+            return;
+        }
+
+        enemyTurn(enemy);
+    }
+
+    private void performDefend(Enemy enemy) {
+        if (!player.isAlive() || !enemy.isAlive()) return;
+
+        int tempDefense = player.defense + 5;
+        battleLog("🛡 Вы защищаетесь! Защита увеличена на 5.");
+
+        enemyTurn(enemy, tempDefense);
+    }
+
+    private void usePotion(Enemy enemy) {
+        if (player.potions > 0) {
+            player.heal(30);
+            player.potions--;
+            battleLog("🧪 Использовано зелье здоровья! +30 HP");
+            updateStatsDisplay();
+            enemyTurn(enemy);
+        } else {
+            battleLog("❌ У вас нет зелий!");
+        }
+    }
+
+    private void attemptRun(Enemy enemy) {
+        if (random.nextInt(100) < 50) {
+            battleLog("🏃‍♂️ Вы успешно сбежали!");
+            cardLayout.show(mainPanel, "game");
+            log("Вы сбежали от " + enemy.name);
+        } else {
+            battleLog("❌ Не удалось сбежать!");
+            enemyTurn(enemy);
+        }
+    }
+
+    private void enemyTurn(Enemy enemy) {
+        enemyTurn(enemy, player.defense);
+    }
+
+    private void enemyTurn(Enemy enemy, int currentDefense) {
+        if (!player.isAlive() || !enemy.isAlive()) return;
+
+        int enemyDamage = Math.max(1, enemy.attack - currentDefense / 2 + random.nextInt(4));
+        player.takeDamage(enemyDamage);
+        battleLog(enemy.name + " наносит вам " + enemyDamage + " урона!");
+
+        updateStatsDisplay();
+
+        if (!player.isAlive()) {
+            endBattleDefeat();
+        }
+    }
+
+    private void endBattleVictory(Enemy enemy) {
+        battleLog("\n🎊 ПОБЕДА! " + enemy.name.toUpperCase() + " ПОБЕЖДЕН!");
+        battleLog("Получено " + enemy.expReward + " опыта и " + enemy.goldReward + " золота!");
+
+        player.addExp(enemy.expReward);
+        player.gold += enemy.goldReward;
+
+        // Шанс найти зелье
+        if (random.nextInt(100) < 30) {
+            player.potions++;
+            battleLog("🧪 Найдено зелье здоровья!");
+        }
+
+        updateStatsDisplay();
+
+        // Кнопка продолжения
+        javax.swing.Timer timer = new javax.swing.Timer(2000, e -> {
+            cardLayout.show(mainPanel, "game");
+            log("Вы победили " + enemy.name + "!");
+            log("Получено: " + enemy.expReward + " опыта, " + enemy.goldReward + " золота");
+        });
+        timer.setRepeats(false);
+        timer.start();
+    }
+
+    private void endBattleDefeat() {
+        battleLog("\n💀 ВЫ ПОГИБЛИ...");
+
+        javax.swing.Timer timer = new javax.swing.Timer(2000, e -> {
+            int response = JOptionPane.showConfirmDialog(
+                    this,
+                    "Вы погибли. Начать новую игру?",
+                    "Поражение",
+                    JOptionPane.YES_NO_OPTION
+            );
+
+            if (response == JOptionPane.YES_OPTION) {
+                cardLayout.show(mainPanel, "menu");
+            } else {
+                System.exit(0);
+            }
+        });
+        timer.setRepeats(false);
+        timer.start();
+    }
+
+    private void visitShop() {
+        String[] options = {
+                "🧪 Зелье здоровья (15 золота)",
+                "⚔ Улучшение меча (50 золота)",
+                "🛡 Улучшение брони (50 золота)",
+                "🚪 Уйти"
+        };
+
+        int choice = JOptionPane.showOptionDialog(
+                this,
+                "Добро пожаловать в магазин!\nВаше золото: " + player.gold,
+                "Магазин",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null,
+                options,
+                options[3]
+        );
+
+        switch(choice) {
+            case 0:
+                if (player.gold >= 15) {
+                    player.gold -= 15;
+                    player.potions++;
+                    log("Куплено зелье здоровья за 15 золота");
+                    updateStatsDisplay();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Недостаточно золота!");
+                }
+                break;
+            case 1:
+                if (player.gold >= 50) {
+                    player.gold -= 50;
+                    player.attack += 2;
+                    log("Куплено улучшение меча! Атака +2");
+                    updateStatsDisplay();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Недостаточно золота!");
+                }
+                break;
+            case 2:
+                if (player.gold >= 50) {
+                    player.gold -= 50;
+                    player.defense += 2;
+                    log("Куплено улучшение брони! Защита +2");
+                    updateStatsDisplay();
+                } else {
+                    JOptionPane.showMessageDialog(this, "Недостаточно золота!");
+                }
+                break;
+        }
+    }
+
+    private void restAtInn() {
+        if (player.gold >= 10) {
+            player.gold -= 10;
+            player.health = player.maxHealth;
+            player.mana = player.maxMana;
+            log("Вы отдохнули в таверне за 10 золота");
+            log("Здоровье и мана полностью восстановлены!");
+            updateStatsDisplay();
+        } else {
+            JOptionPane.showMessageDialog(this, "Недостаточно золота! Нужно 10 золота.");
+        }
+    }
+
+    private void showStats() {
+        StringBuilder stats = new StringBuilder();
+        stats.append("=== ХАРАКТЕРИСТИКИ ===\n");
+        stats.append("Имя: ").append(player.name).append("\n");
+        stats.append("Класс: ").append(player.playerClass).append("\n");
+        stats.append("Уровень: ").append(player.level).append("\n");
+        stats.append("Опыт: ").append(player.exp).append("/").append(player.expToNextLevel).append("\n");
+        stats.append("Здоровье: ").append(player.health).append("/").append(player.maxHealth).append("\n");
+        stats.append("Мана: ").append(player.mana).append("/").append(player.maxMana).append("\n");
+        stats.append("Атака: ").append(player.attack).append("\n");
+        stats.append("Защита: ").append(player.defense).append("\n");
+        stats.append("Золото: ").append(player.gold).append("\n");
+        stats.append("Зелья: ").append(player.potions).append("\n");
+
+        if (!player.inventory.isEmpty()) {
+            stats.append("\n=== ИНВЕНТАРЬ ===\n");
+            for (String item : player.inventory) {
+                stats.append("- ").append(item).append("\n");
+            }
+        }
+
+        JOptionPane.showMessageDialog(this, stats.toString(), "Статистика", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // ============ ТОЧКА ВХОДА ============
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            new Main();  // ИСПРАВЛЕНО: было new GraphicalRPG(), теперь new Main()
+        });
+    }
+}

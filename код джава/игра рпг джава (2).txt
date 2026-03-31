@@ -1,0 +1,43 @@
+import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        // Создаём сервер на порту 8080
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+
+        // Главная страница
+        server.createContext("/", new HttpHandler() {
+            @Override
+            public void handle(HttpExchange exchange) throws IOException {
+                String response = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Мой сервер</title>
+                        <meta charset="UTF-8">
+                    </head>
+                    <body style="font-family: Arial; background: #f0f0f0;">
+                        <h1>🎉 Привет из Java-сервера!</h1>
+                        <p>Сервер запущен на <b>localhost:8080</b></p>
+                        <p>Время на сервере: %s</p>
+                    </body>
+                    </html>
+                    """.formatted(java.time.LocalDateTime.now());
+
+                exchange.sendResponseHeaders(200, response.getBytes().length);
+                OutputStream os = exchange.getResponseBody();
+                os.write(response.getBytes());
+                os.close();
+            }
+        });
+
+        server.setExecutor(null); // использует стандартный поток
+        server.start();
+        System.out.println("✅ Сервер запущен: http://localhost:8080");
+    }
+}

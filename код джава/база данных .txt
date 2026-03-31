@@ -1,0 +1,59 @@
+import java.sql.*;
+import java.nio.file.Paths;
+
+public class Main {
+    public static void main(String[] args) {
+        try {
+            Class.forName("org.h2.Driver");
+        } catch (ClassNotFoundException e) {
+            System.err.println("❌ Драйвер H2 не подключён. Добавь h2-*.jar в библиотеки проекта.");
+            return;
+        }
+
+        // Путь к рабочему столу
+        String desktop = System.getProperty("user.home") + "/Desktop";
+        String dbPath = Paths.get(desktop, "mydb").toString().replace('\\', '/');
+        String url = "jdbc:h2:" + dbPath;
+        String user = "sa";
+        String password = "";
+
+        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+            System.out.println("✅ База данных создана или открыта на рабочем столе.");
+
+            conn.createStatement().execute("""
+                CREATE TABLE IF NOT EXISTS notes (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT,
+                    created TIMESTAMP DEFAULT NOW()
+                );
+                """);
+            System.out.println("✅ Таблица 'notes' готова.");
+
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO notes (title, content) VALUES (?, ?)")) {
+                ps.setString(1, "Привет с рабочего стола!");
+                ps.setString(2, "Эта база данных хранится прямо на твоём Desktop.");
+                ps.executeUpdate();
+            }
+            System.out.println("✅ Запись добавлена.");
+
+            try (ResultSet rs = conn.createStatement().executeQuery("SELECT * FROM notes")) {
+                System.out.println("\n--- Содержимое базы ---");
+                while (rs.next()) {
+                    System.out.println("ID: " + rs.getInt("id"));
+                    System.out.println("Заголовок: " + rs.getString("title"));
+                    System.out.println("Текст: " + rs.getString("content"));
+                    System.out.println("Создано: " + rs.getTimestamp("created"));
+                    System.out.println("------------------------");
+                }
+            }
+
+            System.out.println("\n✅ Готово! Файл 'mydb.mv.db' находится на рабочем столе.");
+
+        } catch (SQLException e) {
+            System.err.println("❌ Ошибка:");
+            e.printStackTrace();
+        }
+    }
+}
